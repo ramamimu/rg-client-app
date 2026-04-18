@@ -160,7 +160,7 @@ export default function DashboardPage() {
               className="bg-white rounded-2xl border border-zinc-100 p-4 flex items-center gap-3"
             >
               <div
-                className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center flex-shrink-0 ${s.color}`}
+                className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center shrink-0 ${s.color}`}
               >
                 {s.icon}
               </div>
@@ -230,7 +230,7 @@ export default function DashboardPage() {
                     alt={t.couple}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/10 to-transparent" />
 
                   {/* Status badge */}
                   <div className="absolute top-3 left-3">
