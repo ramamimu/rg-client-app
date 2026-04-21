@@ -1,6 +1,97 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { db } from "@/utils/firebase/client";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+
+interface Couple {
+  shortName: string;
+  fullName: string;
+  photoUrl: string;
+  parents: {
+    father: string;
+    mother: string;
+  };
+}
+
+interface Quote {
+  enabled: boolean;
+  text: string;
+  source: string;
+}
+
+interface Story {
+  title: string;
+  description: string;
+  photoUrl: string;
+}
+
+interface LoveStory {
+  enabled: boolean;
+  stories?: Story[];
+}
+
+interface Livestream {
+  enabled: boolean;
+  url: string;
+  platform: string;
+  startTime: Date;
+}
+
+export interface Event {
+  title: string;
+  timeStart: Date;
+  timeEnd: Date | null;
+  venue: string;
+  address: string;
+  mapsUrl: string;
+  dresscode?: string;
+}
+
+export interface BankAccount {
+  bank: string;
+  accountNumber: string;
+  accountName: string;
+}
+
+export interface Gift {
+  enabled: boolean;
+  address?: string;
+  bankAccount?: BankAccount;
+}
+
+export interface Comment {
+  id: string;
+  name: string;
+  message: string;
+  timestamp: Date;
+}
+
+export interface Galery {
+  enabled: boolean;
+  photos: string[]; // array of photo URLs
+}
+
+interface FormData {
+  bride: Couple;
+  groom: Couple;
+  weddingDate: Date;
+  events: Event[];
+  quote: Quote;
+  loveStories: LoveStory;
+  livestream: Livestream;
+  gallery: Galery;
+  gift: Gift;
+  music?: string; // music URL
+  rsvpEnabled: boolean;
+  commentsEnabled: boolean;
+}
 
 const SECTIONS = [
   { id: "bride", label: "Bride", icon: <PersonIcon /> },
@@ -17,12 +108,30 @@ const SECTIONS = [
   { id: "guest", label: "Guest", icon: <GuestIcon /> },
 ];
 
+const documentId = "shoope_3828883JI";
+
+const loadData = async () => {
+  const docRef = doc(db, "forms", documentId);
+
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    console.log("Document data:", docSnap.data());
+  } else {
+    console.log("No such document! Creating a new one...");
+    await setDoc(docRef, { createdAt: serverTimestamp() });
+  }
+};
+
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 export default function FormPage() {
   const [activeSection, setActiveSection] = useState<SectionId>("bride");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const toggleCollapse = (id: string) =>
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
