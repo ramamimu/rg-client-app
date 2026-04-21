@@ -9,89 +9,15 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
-
-interface Couple {
-  shortName: string;
-  fullName: string;
-  photoUrl: string;
-  parents: {
-    father: string;
-    mother: string;
-  };
-}
-
-interface Quote {
-  enabled: boolean;
-  text: string;
-  source: string;
-}
-
-interface Story {
-  title: string;
-  description: string;
-  photoUrl: string;
-}
-
-interface LoveStory {
-  enabled: boolean;
-  stories?: Story[];
-}
-
-interface Livestream {
-  enabled: boolean;
-  url: string;
-  platform: string;
-  startTime: Date;
-}
-
-export interface Event {
-  title: string;
-  timeStart: Date;
-  timeEnd: Date | null;
-  venue: string;
-  address: string;
-  mapsUrl: string;
-  dresscode?: string;
-}
-
-export interface BankAccount {
-  bank: string;
-  accountNumber: string;
-  accountName: string;
-}
-
-export interface Gift {
-  enabled: boolean;
-  address?: string;
-  bankAccount?: BankAccount;
-}
-
-export interface Comment {
-  id: string;
-  name: string;
-  message: string;
-  timestamp: Date;
-}
-
-export interface Galery {
-  enabled: boolean;
-  photos: string[]; // array of photo URLs
-}
-
-interface FormData {
-  bride: Couple;
-  groom: Couple;
-  weddingDate: Date;
-  events: Event[];
-  quote: Quote;
-  loveStories: LoveStory;
-  livestream: Livestream;
-  gallery: Galery;
-  gift: Gift;
-  music?: string; // music URL
-  rsvpEnabled: boolean;
-  commentsEnabled: boolean;
-}
+// import { useForm, useFieldArray, Controller } from "react-hook-form";
+// import { zodResolver } from "@hookform/resolvers/zod";
+// import { createInvitation } from "@/lib/firestore/invitations";
+// import {
+//   invitationSchema,
+//   InvitationFormValues,
+// } from "@/lib/validations/invitation";
+import { invitationDefaultValues } from "@/lib/defaults/invitation";
+import { createInvitation } from "@/lib/firestore/invitations";
 
 const SECTIONS = [
   { id: "bride", label: "Bride", icon: <PersonIcon /> },
@@ -106,21 +32,10 @@ const SECTIONS = [
   { id: "music", label: "Music", icon: <MusicIcon /> },
   { id: "comments", label: "Comments", icon: <CommentIcon /> },
   { id: "guest", label: "Guest", icon: <GuestIcon /> },
+  { id: "notes", label: "Notes", icon: <NoteIcon /> },
 ];
 
 const documentId = "shoope_3828883JI";
-
-const loadData = async () => {
-  const docRef = doc(db, "forms", documentId);
-
-  const docSnap = await getDoc(docRef);
-  if (docSnap.exists()) {
-    console.log("Document data:", docSnap.data());
-  } else {
-    console.log("No such document! Creating a new one...");
-    await setDoc(docRef, { createdAt: serverTimestamp() });
-  }
-};
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -128,6 +43,44 @@ export default function FormPage() {
   const [activeSection, setActiveSection] = useState<SectionId>("bride");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [formValues, setFormValues] = useState(invitationDefaultValues);
+
+  const update = (path: string, value: unknown) => {
+    setFormValues((prev) => {
+      const keys = path.split(".");
+      const result = structuredClone(prev);
+      let current: Record<string, unknown> = result as Record<string, unknown>;
+
+      keys.slice(0, -1).forEach((key) => {
+        current = current[key] as Record<string, unknown>;
+      });
+
+      current[keys[keys.length - 1]] = value;
+      return result;
+    });
+  };
+
+  const loadData = async () => {
+    const docRef = doc(db, "forms", documentId);
+
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      console.log("Document data:", docSnap.data());
+      setFormValues((prev) => ({ ...prev, ...docSnap.data() }));
+    } else {
+      console.log("No such document! Creating a new one...");
+      await setDoc(docRef, { createdAt: serverTimestamp() });
+    }
+  };
+
+  const saveData = async () => {
+    try {
+      await createInvitation(formValues, documentId);
+      console.log("Data saved successfully!");
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -197,7 +150,10 @@ export default function FormPage() {
             <ExportIcon />
             <span className="hidden md:inline">Export</span>
           </button>
-          <button className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors">
+          <button
+            onClick={saveData}
+            className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors"
+          >
             <SaveIcon />
             Save
           </button>
@@ -296,11 +252,19 @@ export default function FormPage() {
             onToggle={() => toggleCollapse("bride")}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Short Name" required placeholder="e.g. Anisa" />
+              <Field
+                label="Short Name"
+                required
+                placeholder="e.g. Anisa"
+                value={formValues.bride.shortName}
+                onChange={(e) => update("bride.shortName", e.target.value)}
+              />
               <Field
                 label="Full Name"
                 required
                 placeholder="e.g. Anisa Rahmawati"
+                onChange={(e) => update("bride.fullName", e.target.value)}
+                value={formValues.bride.fullName}
               />
             </div>
             <Field
@@ -308,14 +272,30 @@ export default function FormPage() {
               placeholder="https://..."
               hint="Portrait photo (400×500 recommended)"
               wide
+              onChange={(e) => update("bride.photoUrl", e.target.value)}
+              value={formValues.bride.photoUrl}
             />
             <div>
               <p className="text-[10px] font-semibold text-zinc-400 tracking-widest mb-3">
                 PARENTS
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Father's Name" placeholder="Father's name" />
-                <Field label="Mother's Name" placeholder="Mother's name" />
+                <Field
+                  label="Father's Name"
+                  placeholder="Father's name"
+                  value={formValues.bride.parents.father}
+                  onChange={(e) =>
+                    update("bride.parents.father", e.target.value)
+                  }
+                />
+                <Field
+                  label="Mother's Name"
+                  placeholder="Mother's name"
+                  value={formValues.bride.parents.mother}
+                  onChange={(e) =>
+                    update("bride.parents.mother", e.target.value)
+                  }
+                />
               </div>
             </div>
           </Section>
@@ -328,11 +308,19 @@ export default function FormPage() {
             onToggle={() => toggleCollapse("groom")}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Short Name" required placeholder="e.g. Rendra" />
+              <Field
+                label="Short Name"
+                required
+                placeholder="e.g. Rendra"
+                value={formValues.groom.shortName}
+                onChange={(e) => update("groom.shortName", e.target.value)}
+              />
               <Field
                 label="Full Name"
                 required
                 placeholder="e.g. Rendra Pratama"
+                value={formValues.groom.fullName}
+                onChange={(e) => update("groom.fullName", e.target.value)}
               />
             </div>
             <Field
@@ -340,14 +328,30 @@ export default function FormPage() {
               placeholder="https://..."
               hint="Portrait photo (400×500 recommended)"
               wide
+              value={formValues.groom.photoUrl}
+              onChange={(e) => update("groom.photoUrl", e.target.value)}
             />
             <div>
               <p className="text-[10px] font-semibold text-zinc-400 tracking-widest mb-3">
                 PARENTS
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Father's Name" placeholder="Father's name" />
-                <Field label="Mother's Name" placeholder="Mother's name" />
+                <Field
+                  label="Father's Name"
+                  placeholder="Father's name"
+                  value={formValues.groom.parents.father}
+                  onChange={(e) =>
+                    update("groom.parents.father", e.target.value)
+                  }
+                />
+                <Field
+                  label="Mother's Name"
+                  placeholder="Mother's name"
+                  value={formValues.groom.parents.mother}
+                  onChange={(e) =>
+                    update("groom.parents.mother", e.target.value)
+                  }
+                />
               </div>
             </div>
           </Section>
@@ -365,14 +369,13 @@ export default function FormPage() {
                 required
                 placeholder="e.g. 14 June 2026"
                 type="date"
+                value={formValues.weddingDate.toISOString().split("T")[0]}
+                onChange={(e) =>
+                  update("weddingDate", new Date(e.target.value))
+                }
               />
               <Field label="Time" placeholder="e.g. 10:00 WIB" type="time" />
             </div>
-            <Field
-              label="Hijri Date"
-              placeholder="e.g. 17 Dzulhijjah 1447 H"
-              wide
-            />
           </Section>
 
           <Section
@@ -382,13 +385,28 @@ export default function FormPage() {
             collapsed={collapsed["quote"]}
             onToggle={() => toggleCollapse("quote")}
           >
+            <ToggleRow
+              label="Enable Quote"
+              defaultOn
+              description="Show a special quote on the invitation"
+              value={formValues.quote.enabled}
+              onChange={(e) => update("quote.enabled", e)}
+            />
             <Field
               label="Quote Text"
               placeholder="e.g. And of His signs is that He created for you from yourselves mates..."
               wide
               textarea
+              value={formValues.quote.text}
+              onChange={(e) => update("quote.text", e.target.value)}
             />
-            <Field label="Quote Source" placeholder="e.g. Ar-Rum: 21" wide />
+            <Field
+              label="Quote Source"
+              placeholder="e.g. Ar-Rum: 21"
+              wide
+              value={formValues.quote.source}
+              onChange={(e) => update("quote.source", e.target.value)}
+            />
           </Section>
 
           <Section
@@ -398,18 +416,35 @@ export default function FormPage() {
             collapsed={collapsed["love-stories"]}
             onToggle={() => toggleCollapse("love-stories")}
           >
-            {[1, 2].map((i) => (
+            {formValues.loveStories.stories?.map((story, i) => (
               <div
                 key={i}
                 className="border border-zinc-100 rounded-xl p-4 space-y-3 bg-zinc-50/50"
               >
-                <p className="text-xs font-medium text-zinc-500">Story {i}</p>
-                <Field label="Title" placeholder="e.g. First Met" wide />
+                <p className="text-xs font-medium text-zinc-500">
+                  Story {i + 1}
+                </p>
+                <Field
+                  label="Title"
+                  placeholder="e.g. First Met"
+                  wide
+                  value={story.title}
+                  onChange={(e) =>
+                    update(`loveStories.stories.${i}.title`, e.target.value)
+                  }
+                />
                 <Field
                   label="Description"
                   placeholder="Tell the story..."
                   wide
                   textarea
+                  value={story.description}
+                  onChange={(e) =>
+                    update(
+                      `loveStories.stories.${i}.description`,
+                      e.target.value,
+                    )
+                  }
                 />
                 <Field label="Photo URL" placeholder="https://..." wide />
               </div>
@@ -430,10 +465,30 @@ export default function FormPage() {
               label="Livestream URL"
               placeholder="https://youtube.com/live/..."
               wide
+              value={formValues.livestream.url}
+              onChange={(e) => update("livestream.url", e.target.value)}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Platform" placeholder="e.g. YouTube" />
-              <Field label="Start Time" placeholder="e.g. 09:00 WIB" />
+              <Field
+                label="Platform"
+                placeholder="e.g. YouTube"
+                value={formValues.livestream.platform}
+                onChange={(e) => update("livestream.platform", e.target.value)}
+              />
+              <Field
+                label="Start Time"
+                placeholder="e.g. 09:00 WIB"
+                value={formValues.livestream.startTime
+                  .toISOString()
+                  .split("T")[1]
+                  .slice(0, 5)}
+                onChange={(e) =>
+                  update(
+                    "livestream.startTime",
+                    new Date(`1970-01-01T${e.target.value}:00`),
+                  )
+                }
+              />
             </div>
           </Section>
 
@@ -444,31 +499,85 @@ export default function FormPage() {
             collapsed={collapsed["events"]}
             onToggle={() => toggleCollapse("events")}
           >
-            {["Akad Nikah", "Resepsi"].map((event) => (
+            {formValues.events.map((event) => (
               <div
-                key={event}
+                key={event.title + event.timeStart.toISOString()}
                 className="border border-zinc-100 rounded-xl p-4 space-y-3 bg-zinc-50/50"
               >
-                <p className="text-xs font-medium text-zinc-500">{event}</p>
+                <p className="text-xs font-medium text-zinc-500">
+                  {event.title}
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Date" placeholder="14 June 2026" type="date" />
-                  <Field label="Time" placeholder="10:00 WIB" type="time" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field
+                    label="Start Time"
+                    placeholder="10:00 WIB"
+                    type="time"
+                    value={event.timeStart
+                      .toISOString()
+                      .split("T")[1]
+                      .slice(0, 5)}
+                    onChange={(e) =>
+                      update(
+                        `events.${formValues.events.indexOf(event)}.timeStart`,
+                        new Date(`1970-01-01T${e.target.value}:00`),
+                      )
+                    }
+                  />
+                  <Field
+                    label="End Time"
+                    placeholder="10:00 WIB"
+                    type="time"
+                    value={event.timeEnd
+                      ?.toISOString()
+                      .split("T")[1]
+                      .slice(0, 5)}
+                    onChange={(e) =>
+                      update(
+                        `events.${formValues.events.indexOf(event)}.timeEnd`,
+                        new Date(`1970-01-01T${e.target.value}:00`),
+                      )
+                    }
+                  />
                 </div>
                 <Field
                   label="Venue Name"
                   placeholder="e.g. Gedung Serbaguna"
                   wide
+                  value={event.venue}
+                  onChange={(e) =>
+                    update(
+                      `events.${formValues.events.indexOf(event)}.venue`,
+                      e.target.value,
+                    )
+                  }
                 />
                 <Field
                   label="Address"
                   placeholder="Full address..."
                   wide
                   textarea
+                  value={event.address}
+                  onChange={(e) =>
+                    update(
+                      `events.${formValues.events.indexOf(event)}.address`,
+                      e.target.value,
+                    )
+                  }
                 />
                 <Field
                   label="Google Maps URL"
                   placeholder="https://maps.google.com/..."
                   wide
+                  value={event.mapsUrl}
+                  onChange={(e) =>
+                    update(
+                      `events.${formValues.events.indexOf(event)}.mapsUrl`,
+                      e.target.value,
+                    )
+                  }
                 />
               </div>
             ))}
@@ -482,11 +591,15 @@ export default function FormPage() {
             onToggle={() => toggleCollapse("gallery")}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[1, 2, 3, 4].map((i) => (
+              {formValues.gallery.photos.map((photo, i) => (
                 <Field
                   key={i}
                   label={`Photo ${i} URL`}
                   placeholder="https://..."
+                  value={photo}
+                  onChange={(e) =>
+                    update(`gallery.photos.${i}`, e.target.value)
+                  }
                 />
               ))}
             </div>
@@ -502,17 +615,36 @@ export default function FormPage() {
             collapsed={collapsed["gift"]}
             onToggle={() => toggleCollapse("gift")}
           >
-            {["BCA", "Mandiri"].map((bank) => (
+            {formValues.gift.bankAccounts?.map((bankAccount, i) => (
               <div
-                key={bank}
+                key={i}
                 className="border border-zinc-100 rounded-xl p-4 space-y-3 bg-zinc-50/50"
               >
-                <p className="text-xs font-medium text-zinc-500">{bank}</p>
+                <p className="text-xs font-medium text-zinc-500">
+                  {bankAccount.bank}
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Account Number" placeholder="e.g. 1234567890" />
+                  <Field
+                    label="Account Number"
+                    placeholder="e.g. 1234567890"
+                    value={bankAccount.accountNumber}
+                    onChange={(e) =>
+                      update(
+                        `gift.bankAccounts.${i}.accountNumber`,
+                        e.target.value,
+                      )
+                    }
+                  />
                   <Field
                     label="Account Name"
                     placeholder="e.g. Anisa Rahmawati"
+                    value={bankAccount.accountName}
+                    onChange={(e) =>
+                      update(
+                        `gift.bankAccounts.${i}.accountName`,
+                        e.target.value,
+                      )
+                    }
                   />
                 </div>
               </div>
@@ -522,6 +654,8 @@ export default function FormPage() {
               placeholder="Physical gift delivery address..."
               wide
               textarea
+              value={formValues.gift.address}
+              onChange={(e) => update("gift.address", e.target.value)}
             />
           </Section>
 
@@ -536,11 +670,9 @@ export default function FormPage() {
               label="Music URL"
               placeholder="https://... (mp3 or audio file)"
               wide
+              value={formValues.music}
+              onChange={(e) => update("music", e.target.value)}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Song Title" placeholder="e.g. A Thousand Years" />
-              <Field label="Artist" placeholder="e.g. Christina Perri" />
-            </div>
           </Section>
 
           <Section
@@ -554,10 +686,8 @@ export default function FormPage() {
               label="Enable Comments"
               description="Allow guests to leave wishes"
               defaultOn
-            />
-            <ToggleRow
-              label="Moderation"
-              description="Approve comments before showing"
+              value={formValues.commentsEnabled}
+              onChange={(e) => update("commentsEnabled", e)}
             />
           </Section>
 
@@ -572,15 +702,25 @@ export default function FormPage() {
               label="RSVP Enabled"
               description="Allow guests to confirm attendance"
               defaultOn
+              value={formValues.rsvpEnabled}
+              onChange={(e) => update("rsvpEnabled", e)}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
-              <Field
-                label="RSVP Deadline"
-                placeholder="e.g. 7 June 2026"
-                type="date"
-              />
-              <Field label="Max Guests" placeholder="e.g. 200" type="number" />
-            </div>
+          </Section>
+          <Section
+            id="notes"
+            label="Notes"
+            icon={<NoteIcon color="#e05070" />}
+            collapsed={collapsed["notes"]}
+            onToggle={() => toggleCollapse("notes")}
+          >
+            <Field
+              label="Notes"
+              placeholder="Additional notes..."
+              wide
+              textarea
+              value={formValues.notes}
+              onChange={(e) => update("notes", e.target.value)}
+            />
           </Section>
         </main>
       </div>
@@ -641,12 +781,18 @@ function Field({
   wide,
   textarea,
   type,
+  value,
+  onChange,
 }: {
   label: string;
   placeholder?: string;
   required?: boolean;
   hint?: string;
   wide?: boolean;
+  value?: string;
+  onChange?: (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => void;
   textarea?: boolean;
   type?: string;
 }) {
@@ -661,12 +807,16 @@ function Field({
           placeholder={placeholder}
           rows={3}
           className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl text-sm text-zinc-800 placeholder-zinc-300 outline-none focus:border-rose-300 resize-none transition-colors"
+          value={value}
+          onChange={onChange}
         />
       ) : (
         <input
           type={type || "text"}
           placeholder={placeholder}
           className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl text-sm text-zinc-800 placeholder-zinc-300 outline-none focus:border-rose-300 transition-colors"
+          value={value}
+          onChange={onChange}
         />
       )}
       {hint && <p className="text-xs text-zinc-400 mt-1">{hint}</p>}
@@ -679,12 +829,18 @@ function ToggleRow({
   label,
   description,
   defaultOn = false,
+  onChange,
+  value,
 }: {
   label: string;
   description: string;
   defaultOn?: boolean;
+  onChange?: (value: boolean) => void;
+  value?: boolean;
 }) {
   const [on, setOn] = useState(defaultOn);
+  const isControlled = value !== undefined;
+  const currentValue = isControlled ? value : on;
   return (
     <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-100">
       <div>
@@ -692,11 +848,15 @@ function ToggleRow({
         <p className="text-xs text-zinc-400 mt-0.5">{description}</p>
       </div>
       <button
-        onClick={() => setOn(!on)}
-        className={`relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0 ${on ? "bg-rose-500" : "bg-zinc-200"}`}
+        onClick={() => {
+          const newValue = !currentValue;
+          if (!isControlled) setOn(newValue);
+          if (onChange) onChange(newValue);
+        }}
+        className={`relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0 ${currentValue ? "bg-rose-500" : "bg-zinc-200"}`}
       >
         <span
-          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${on ? "translate-x-4" : "translate-x-0"}`}
+          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${currentValue ? "translate-x-4" : "translate-x-0"}`}
         />
       </button>
     </div>
@@ -1032,6 +1192,23 @@ function SaveIcon() {
       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
       <polyline points="17 21 17 13 7 13 7 21" />
       <polyline points="7 3 7 8 15 8" />
+    </svg>
+  );
+}
+
+function NoteIcon({ color = "currentColor" }: { color?: string }) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
