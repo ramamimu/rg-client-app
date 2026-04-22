@@ -14,18 +14,18 @@ export interface Quote {
   source: string;
 }
 
-interface Story {
+export interface Story {
   title: string;
   description: string;
   photoUrl: string;
 }
 
-interface LoveStory {
+export interface LoveStory {
   enabled: boolean;
   stories?: Story[];
 }
 
-interface Livestream {
+export interface Livestream {
   enabled: boolean;
   url: string;
   platform: string;

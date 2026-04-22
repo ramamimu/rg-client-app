@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db } from "@/utils/firebase/client";
+import { useEffect, useMemo, useState } from "react";
+import { db } from "@/lib/init/firebase/client";
 import {
   doc,
   getDoc,
@@ -18,6 +18,15 @@ import {
 // } from "@/lib/validations/invitation";
 import { invitationDefaultValues } from "@/lib/defaults/invitation";
 import { createInvitation } from "@/lib/firestore/invitations";
+import {
+  formatDateForInput,
+  formatDateTimeForInput,
+  formatTimeForInput,
+  toDate,
+} from "@/utils/date";
+import { deepEqual } from "@/utils/deepEqual";
+import { toast } from "sonner";
+import { Event, Story } from "@/types/invitation";
 
 const SECTIONS = [
   { id: "bride", label: "Bride", icon: <PersonIcon /> },
@@ -44,6 +53,15 @@ export default function FormPage() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [formValues, setFormValues] = useState(invitationDefaultValues);
+  const [prevFormValues, setPrevFormValues] = useState(formValues);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const isDirty = useMemo(() => {
+    return !deepEqual(formValues, prevFormValues);
+  }, [formValues, prevFormValues]);
 
   const update = (path: string, value: unknown) => {
     setFormValues((prev) => {
@@ -65,26 +83,56 @@ export default function FormPage() {
 
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
+      const raw = docSnap.data();
+
+      const nextFormValues = {
+        ...formValues,
+        ...raw,
+        createdAt: toDate(raw?.createdAt) ?? formValues.createdAt,
+        weddingDate: toDate(raw?.weddingDate) ?? formValues.weddingDate,
+        livestream: {
+          ...formValues.livestream,
+          ...(raw?.livestream ?? {}),
+          startTime:
+            toDate(raw?.livestream?.startTime) ??
+            formValues.livestream.startTime,
+        },
+        events: Array.isArray(raw?.events)
+          ? raw.events.map((ev: any, i: number) => ({
+              ...formValues.events[i],
+              ...ev,
+              timeStart:
+                toDate(ev?.timeStart) ??
+                formValues.events[i]?.timeStart ??
+                new Date(),
+              timeEnd: ev?.timeEnd
+                ? (toDate(ev.timeEnd) ?? formValues.events[i]?.timeEnd ?? null)
+                : null,
+            }))
+          : formValues.events,
+      };
+
+      setFormValues(nextFormValues);
+      setPrevFormValues(nextFormValues);
       console.log("Document data:", docSnap.data());
-      setFormValues((prev) => ({ ...prev, ...docSnap.data() }));
     } else {
       console.log("No such document! Creating a new one...");
       await setDoc(docRef, { createdAt: serverTimestamp() });
     }
+
+    // toast.dismiss(idToast);
   };
 
   const saveData = async () => {
+    const toastId = toast.loading("Saving data...");
     try {
       await createInvitation(formValues, documentId);
-      console.log("Data saved successfully!");
+      toast.success("Data saved successfully!", { id: toastId });
     } catch (err) {
-      console.error(err);
+      toast.error("Failed to save data. Please try again.", { id: toastId });
+    } finally {
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const toggleCollapse = (id: string) =>
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -99,10 +147,36 @@ export default function FormPage() {
     }, 50);
   };
 
+  const addEvent = () => {
+    const newStory = {
+      address: "",
+      dresscode: "",
+      mapsUrl: "",
+      timeEnd: null,
+      timeStart: new Date(),
+      title: "",
+      venue: "",
+    } as Event;
+
+    update("events", [...formValues.events, newStory]);
+  };
+
+  const addLoveStory = () => {
+    const newStory = { title: "", description: "", photoUrl: "" } as Story;
+    update("loveStories.stories", [
+      ...(formValues.loveStories.stories ?? []),
+      newStory,
+    ]);
+  };
+
+  const addPhoto = () => {
+    update("gallery.photos", [...formValues.gallery.photos, ""]);
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-white">
       {/* ── Top Nav ── */}
-      <header className="bg-white border-b border-zinc-200 px-4 md:px-6 py-3 flex items-center justify-between gap-3 z-20 shrink-0">
+      <header className="bg-white border-b border-zinc-200 px-4 md:px-6 py-3 flex items-center justify-between gap-3 z-20 shrink-0 h-20">
         <div className="flex items-center gap-3 min-w-0">
           {/* Hamburger — mobile only */}
           <button
@@ -138,7 +212,7 @@ export default function FormPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button className="hidden sm:flex items-center gap-1.5 text-zinc-600 hover:text-zinc-800 border border-zinc-200 text-xs font-medium px-3 py-2 rounded-xl transition-all">
+          {/* <button className="hidden sm:flex items-center gap-1.5 text-zinc-600 hover:text-zinc-800 border border-zinc-200 text-xs font-medium px-3 py-2 rounded-xl transition-all">
             <PreviewIcon />
             <span className="hidden md:inline">Preview JSON</span>
           </button>
@@ -149,14 +223,21 @@ export default function FormPage() {
           <button className="hidden sm:flex items-center gap-1.5 text-zinc-600 hover:text-zinc-800 border border-zinc-200 text-xs font-medium px-3 py-2 rounded-xl transition-all">
             <ExportIcon />
             <span className="hidden md:inline">Export</span>
-          </button>
-          <button
-            onClick={saveData}
-            className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors"
-          >
-            <SaveIcon />
-            Save
-          </button>
+          </button> */}
+          <div className="flex flex-col items-end gap-2">
+            <button
+              onClick={saveData}
+              className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors"
+            >
+              <SaveIcon />
+              Save
+            </button>
+            {isDirty && (
+              <span className="text-rose-500 text-xs ml-2">
+                Unsaved changes
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -369,13 +450,115 @@ export default function FormPage() {
                 required
                 placeholder="e.g. 14 June 2026"
                 type="date"
-                value={formValues.weddingDate.toISOString().split("T")[0]}
+                value={formatDateForInput(formValues.weddingDate)}
                 onChange={(e) =>
                   update("weddingDate", new Date(e.target.value))
                 }
               />
-              <Field label="Time" placeholder="e.g. 10:00 WIB" type="time" />
             </div>
+          </Section>
+
+          <Section
+            id="events"
+            label="Events"
+            icon={<EventIcon color="#e05070" />}
+            collapsed={collapsed["events"]}
+            onToggle={() => toggleCollapse("events")}
+          >
+            {formValues.events.map((event) => (
+              <div
+                key={event.title + event.timeStart.toISOString()}
+                className="border border-zinc-100 rounded-xl p-4 space-y-3 bg-zinc-50/50"
+              >
+                <p className="text-xs font-medium text-zinc-500">
+                  {event.title}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field
+                    label="Start Time"
+                    placeholder="10:00 WIB"
+                    type="time"
+                    value={formatTimeForInput(event.timeStart)}
+                    onChange={(e) =>
+                      update(
+                        `events.${formValues.events.indexOf(event)}.timeStart`,
+                        new Date(`1970-01-01T${e.target.value}:00`),
+                      )
+                    }
+                  />
+                  <div>
+                    <Field
+                      label="End Time"
+                      placeholder="10:00 WIB"
+                      type="time"
+                      value={formatTimeForInput(event.timeEnd)}
+                      onChange={(e) =>
+                        update(
+                          `events.${formValues.events.indexOf(event)}.timeEnd`,
+                          new Date(`1970-01-01T${e.target.value}:00`),
+                        )
+                      }
+                    />
+                    <ClearButton
+                      onClick={() =>
+                        update(
+                          `events.${formValues.events.indexOf(event)}.timeEnd`,
+                          null,
+                        )
+                      }
+                      text="Clear"
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+                <Field
+                  label="Venue Name"
+                  placeholder="e.g. Gedung Serbaguna"
+                  wide
+                  value={event.venue}
+                  onChange={(e) =>
+                    update(
+                      `events.${formValues.events.indexOf(event)}.venue`,
+                      e.target.value,
+                    )
+                  }
+                />
+                <Field
+                  label="Address"
+                  placeholder="Full address..."
+                  wide
+                  textarea
+                  value={event.address}
+                  onChange={(e) =>
+                    update(
+                      `events.${formValues.events.indexOf(event)}.address`,
+                      e.target.value,
+                    )
+                  }
+                />
+                <Field
+                  label="Google Maps URL"
+                  placeholder="https://maps.google.com/..."
+                  wide
+                  value={event.mapsUrl}
+                  onChange={(e) =>
+                    update(
+                      `events.${formValues.events.indexOf(event)}.mapsUrl`,
+                      e.target.value,
+                    )
+                  }
+                />
+                <DeleteButton
+                  onClick={() => {
+                    const updatedEvents = formValues.events.filter(
+                      (e) => e !== event,
+                    );
+                    update("events", updatedEvents);
+                  }}
+                />
+              </div>
+            ))}
+            <AddButton onClick={addEvent} text="Add Event" />
           </Section>
 
           <Section
@@ -416,14 +599,19 @@ export default function FormPage() {
             collapsed={collapsed["love-stories"]}
             onToggle={() => toggleCollapse("love-stories")}
           >
+            <ToggleRow
+              label="Enable Love Stories"
+              defaultOn
+              description="Share your love stories on the invitation"
+              value={formValues.loveStories.enabled}
+              onChange={(e) => update("loveStories.enabled", e)}
+            />
+
             {formValues.loveStories.stories?.map((story, i) => (
               <div
                 key={i}
                 className="border border-zinc-100 rounded-xl p-4 space-y-3 bg-zinc-50/50"
               >
-                <p className="text-xs font-medium text-zinc-500">
-                  Story {i + 1}
-                </p>
                 <Field
                   label="Title"
                   placeholder="e.g. First Met"
@@ -447,11 +635,18 @@ export default function FormPage() {
                   }
                 />
                 <Field label="Photo URL" placeholder="https://..." wide />
+                <DeleteButton
+                  onClick={() => {
+                    const updatedStories =
+                      formValues.loveStories.stories?.filter(
+                        (_, index) => index !== i,
+                      ) ?? [];
+                    update("loveStories.stories", updatedStories);
+                  }}
+                />
               </div>
             ))}
-            <button className="text-rose-500 hover:text-rose-600 text-sm font-medium flex items-center gap-1.5 transition-colors">
-              <span className="text-base">+</span> Add Story
-            </button>
+            <AddButton onClick={addLoveStory} text="Add Story" />
           </Section>
 
           <Section
@@ -461,6 +656,13 @@ export default function FormPage() {
             collapsed={collapsed["livestream"]}
             onToggle={() => toggleCollapse("livestream")}
           >
+            <ToggleRow
+              label="Enable Livestream"
+              defaultOn
+              description="Stream your wedding events live for remote guests"
+              value={formValues.livestream.enabled}
+              onChange={(e) => update("livestream.enabled", e)}
+            />
             <Field
               label="Livestream URL"
               placeholder="https://youtube.com/live/..."
@@ -477,11 +679,9 @@ export default function FormPage() {
               />
               <Field
                 label="Start Time"
+                type="time"
                 placeholder="e.g. 09:00 WIB"
-                value={formValues.livestream.startTime
-                  .toISOString()
-                  .split("T")[1]
-                  .slice(0, 5)}
+                value={formatTimeForInput(formValues.livestream.startTime)}
                 onChange={(e) =>
                   update(
                     "livestream.startTime",
@@ -493,108 +693,24 @@ export default function FormPage() {
           </Section>
 
           <Section
-            id="events"
-            label="Events"
-            icon={<EventIcon color="#e05070" />}
-            collapsed={collapsed["events"]}
-            onToggle={() => toggleCollapse("events")}
-          >
-            {formValues.events.map((event) => (
-              <div
-                key={event.title + event.timeStart.toISOString()}
-                className="border border-zinc-100 rounded-xl p-4 space-y-3 bg-zinc-50/50"
-              >
-                <p className="text-xs font-medium text-zinc-500">
-                  {event.title}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Date" placeholder="14 June 2026" type="date" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field
-                    label="Start Time"
-                    placeholder="10:00 WIB"
-                    type="time"
-                    value={event.timeStart
-                      .toISOString()
-                      .split("T")[1]
-                      .slice(0, 5)}
-                    onChange={(e) =>
-                      update(
-                        `events.${formValues.events.indexOf(event)}.timeStart`,
-                        new Date(`1970-01-01T${e.target.value}:00`),
-                      )
-                    }
-                  />
-                  <Field
-                    label="End Time"
-                    placeholder="10:00 WIB"
-                    type="time"
-                    value={event.timeEnd
-                      ?.toISOString()
-                      .split("T")[1]
-                      .slice(0, 5)}
-                    onChange={(e) =>
-                      update(
-                        `events.${formValues.events.indexOf(event)}.timeEnd`,
-                        new Date(`1970-01-01T${e.target.value}:00`),
-                      )
-                    }
-                  />
-                </div>
-                <Field
-                  label="Venue Name"
-                  placeholder="e.g. Gedung Serbaguna"
-                  wide
-                  value={event.venue}
-                  onChange={(e) =>
-                    update(
-                      `events.${formValues.events.indexOf(event)}.venue`,
-                      e.target.value,
-                    )
-                  }
-                />
-                <Field
-                  label="Address"
-                  placeholder="Full address..."
-                  wide
-                  textarea
-                  value={event.address}
-                  onChange={(e) =>
-                    update(
-                      `events.${formValues.events.indexOf(event)}.address`,
-                      e.target.value,
-                    )
-                  }
-                />
-                <Field
-                  label="Google Maps URL"
-                  placeholder="https://maps.google.com/..."
-                  wide
-                  value={event.mapsUrl}
-                  onChange={(e) =>
-                    update(
-                      `events.${formValues.events.indexOf(event)}.mapsUrl`,
-                      e.target.value,
-                    )
-                  }
-                />
-              </div>
-            ))}
-          </Section>
-
-          <Section
             id="gallery"
             label="Gallery"
             icon={<GalleryIcon color="#e05070" />}
             collapsed={collapsed["gallery"]}
             onToggle={() => toggleCollapse("gallery")}
           >
+            <ToggleRow
+              label="Enable Gallery"
+              defaultOn
+              description="Show a photo gallery on the invitation"
+              value={formValues.gallery.enabled}
+              onChange={(e) => update("gallery.enabled", e)}
+            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {formValues.gallery.photos.map((photo, i) => (
                 <Field
                   key={i}
-                  label={`Photo ${i} URL`}
+                  label={`Photo ${i + 1}`}
                   placeholder="https://..."
                   value={photo}
                   onChange={(e) =>
@@ -603,9 +719,7 @@ export default function FormPage() {
                 />
               ))}
             </div>
-            <button className="text-rose-500 hover:text-rose-600 text-sm font-medium flex items-center gap-1.5 transition-colors">
-              <span className="text-base">+</span> Add Photo
-            </button>
+            <AddButton onClick={addPhoto} text="Add Photo" />
           </Section>
 
           <Section
@@ -615,40 +729,13 @@ export default function FormPage() {
             collapsed={collapsed["gift"]}
             onToggle={() => toggleCollapse("gift")}
           >
-            {formValues.gift.bankAccounts?.map((bankAccount, i) => (
-              <div
-                key={i}
-                className="border border-zinc-100 rounded-xl p-4 space-y-3 bg-zinc-50/50"
-              >
-                <p className="text-xs font-medium text-zinc-500">
-                  {bankAccount.bank}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field
-                    label="Account Number"
-                    placeholder="e.g. 1234567890"
-                    value={bankAccount.accountNumber}
-                    onChange={(e) =>
-                      update(
-                        `gift.bankAccounts.${i}.accountNumber`,
-                        e.target.value,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Account Name"
-                    placeholder="e.g. Anisa Rahmawati"
-                    value={bankAccount.accountName}
-                    onChange={(e) =>
-                      update(
-                        `gift.bankAccounts.${i}.accountName`,
-                        e.target.value,
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            ))}
+            <ToggleRow
+              label="Enable Gift"
+              defaultOn
+              description="Allow guests to send gifts"
+              value={formValues.gift.enabled}
+              onChange={(e) => update("gift.enabled", e)}
+            />
             <Field
               label="Gift Address"
               placeholder="Physical gift delivery address..."
@@ -656,6 +743,58 @@ export default function FormPage() {
               textarea
               value={formValues.gift.address}
               onChange={(e) => update("gift.address", e.target.value)}
+            />
+            {formValues.gift.bankAccounts?.map((bankAccount, i) => (
+              <div key={i} className="my-8">
+                <div className="border border-zinc-100 rounded-xl p-4 my-2 bg-zinc-50/50">
+                  <p className="text-xs font-medium text-zinc-500">
+                    {bankAccount.bank}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field
+                      label="Account Number"
+                      placeholder="e.g. 1234567890"
+                      value={bankAccount.accountNumber}
+                      onChange={(e) =>
+                        update(
+                          `gift.bankAccounts.${i}.accountNumber`,
+                          e.target.value,
+                        )
+                      }
+                    />
+                    <Field
+                      label="Account Name"
+                      placeholder="e.g. Anisa Rahmawati"
+                      value={bankAccount.accountName}
+                      onChange={(e) =>
+                        update(
+                          `gift.bankAccounts.${i}.accountName`,
+                          e.target.value,
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <DeleteButton
+                  onClick={() => {
+                    const updatedBankAccounts =
+                      formValues.gift.bankAccounts.filter(
+                        (_, index) => index !== i,
+                      );
+                    update("gift.bankAccounts", updatedBankAccounts);
+                  }}
+                />
+              </div>
+            ))}
+
+            <AddButton
+              onClick={() =>
+                update("gift.bankAccounts", [
+                  ...formValues.gift.bankAccounts,
+                  { bank: "", accountNumber: "", accountName: "" },
+                ])
+              }
+              text="Add Bank Account"
             />
           </Section>
 
@@ -1210,5 +1349,78 @@ function NoteIcon({ color = "currentColor" }: { color?: string }) {
     >
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
+  );
+}
+
+function AddButton({ onClick, text }: { onClick: () => void; text?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-rose-500 hover:text-rose-600 text-sm font-medium flex items-center gap-1.5 transition-colors"
+    >
+      <span className="text-base">+</span> {text || "Add"}
+    </button>
+  );
+}
+
+function DeleteButton({
+  onClick,
+  text,
+}: {
+  onClick: () => void;
+  text?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-zinc-400 hover:text-zinc-500 transition-colors flex items-center gap-1.5 text-sm font-medium rounded-md border border-zinc-200 px-2 py-1 bg-zinc-50"
+    >
+      <svg
+        width={14}
+        height={14}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+      {text || "Delete"}
+    </button>
+  );
+}
+
+function ClearButton({
+  onClick,
+  text,
+  className,
+}: {
+  onClick: () => void;
+  text?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-zinc-400 hover:text-zinc-500 transition-colors flex items-center gap-1.5 text-sm font-medium rounded-md border border-zinc-200 px-2 py-1 bg-zinc-50 ${className}`}
+    >
+      <svg
+        width={14}
+        height={14}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+      {text || "Clear"}
+    </button>
   );
 }

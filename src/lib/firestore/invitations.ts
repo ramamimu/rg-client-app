@@ -1,5 +1,5 @@
 import { Invitation } from "@/types/invitation";
-import { db } from "@/utils/firebase/client";
+import { db } from "@/lib/init/firebase/client";
 import {
   collection,
   addDoc,
