@@ -56,7 +56,7 @@ export default function FormPage() {
   const [prevFormValues, setPrevFormValues] = useState(formValues);
 
   useEffect(() => {
-    loadData();
+    load();
   }, []);
 
   const isDirty = useMemo(() => {
@@ -78,7 +78,7 @@ export default function FormPage() {
     });
   };
 
-  const loadData = async () => {
+  const load = async () => {
     const docRef = doc(db, "forms", documentId);
 
     const docSnap = await getDoc(docRef);
@@ -123,7 +123,7 @@ export default function FormPage() {
     // toast.dismiss(idToast);
   };
 
-  const saveData = async () => {
+  const save = async () => {
     const toastId = toast.loading("Saving data...");
     try {
       await createInvitation(formValues, documentId);
@@ -227,7 +227,7 @@ export default function FormPage() {
           </button> */}
           <div className="flex flex-col items-end gap-2">
             <button
-              onClick={saveData}
+              onClick={save}
               className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors"
             >
               <SaveIcon />
