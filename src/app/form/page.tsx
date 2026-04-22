@@ -131,6 +131,7 @@ export default function FormPage() {
     } catch (err) {
       toast.error("Failed to save data. Please try again.", { id: toastId });
     } finally {
+      setPrevFormValues(formValues);
     }
   };
 
